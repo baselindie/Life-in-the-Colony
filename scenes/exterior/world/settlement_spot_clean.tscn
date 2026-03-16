@@ -1,0 +1,12 @@
+[gd_scene load_steps=3 format=3 uid="uid://dtk85njfysf17"]
+
+[ext_resource type="Script" uid="uid://ch50tlwedbcfk" path="res://scripts/exterior/world/settlement_spot_clean.gd" id="1_5sy8i"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_cm3ef"]
+radius = 25.0
+
+[node name="SettlementSpotClean" type="Area2D"]
+script = ExtResource("1_5sy8i")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_cm3ef")

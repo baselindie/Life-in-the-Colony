@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://bcopwe6c6uqhc"]
+
+[ext_resource type="Script" uid="uid://dn3lhobom2t6p" path="res://scripts/systems/construction_system.gd" id="1_h3drd"]
+
+[node name="ConstructionSystem" type="Node"]
+script = ExtResource("1_h3drd")

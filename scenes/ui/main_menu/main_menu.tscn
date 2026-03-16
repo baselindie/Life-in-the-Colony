@@ -1,0 +1,52 @@
+[gd_scene load_steps=2 format=3 uid="uid://msw2q6dyvtg7"]
+
+[ext_resource type="Script" uid="uid://di1uic02djr7g" path="res://scripts/ui/main_menu/main_menu.gd" id="1_1ch07"]
+
+[node name="main_menu" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+script = ExtResource("1_1ch07")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = 1112.0
+offset_bottom = 608.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 1)
+
+[node name="TitleLabel" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.274999
+anchor_top = 1.275
+anchor_right = 8.175
+anchor_bottom = 2.275
+offset_left = 69.0
+offset_right = -69.0
+grow_horizontal = 2
+grow_vertical = 2
+scale = Vector2(5.75009, 2.93679)
+text = "ACROMYRMEX REALMS"
+metadata/_edit_use_anchors_ = true
+
+[node name="PlayButton" type="Button" parent="."]
+layout_mode = 0
+offset_left = 295.0
+offset_top = 317.0
+offset_right = 353.0
+offset_bottom = 348.0
+text = "JUGAR"
+
+[node name="QuitButton" type="Button" parent="."]
+layout_mode = 0
+offset_left = 872.0
+offset_top = 322.0
+offset_right = 924.0
+offset_bottom = 353.0
+text = "SALIR"

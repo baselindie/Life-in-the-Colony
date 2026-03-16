@@ -1,0 +1,18 @@
+[gd_scene format=3 uid="uid://g6ywggdwutyg"]
+
+[ext_resource type="Texture2D" uid="uid://cni7vkje6c7cl" path="res://icon.svg" id="1_m2fq2"]
+[ext_resource type="Script" uid="uid://kyt3bj3t0al3" path="res://scripts/actors/queen_acromyrmex.gd" id="2_obdv3"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_c5mrq"]
+size = Vector2(64, 64)
+
+[node name="queen_acromyrmex" type="CharacterBody2D" unique_id=2033939671]
+script = ExtResource("2_obdv3")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1730516419]
+position = Vector2(0, 0.5000012)
+scale = Vector2(0.5, 0.5078125)
+texture = ExtResource("1_m2fq2")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=285512542]
+shape = SubResource("RectangleShape2D_c5mrq")

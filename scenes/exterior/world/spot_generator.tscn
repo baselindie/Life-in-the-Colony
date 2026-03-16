@@ -1,0 +1,8 @@
+[gd_scene load_steps=3 format=3 uid="uid://b0syx67sy6rhe"]
+
+[ext_resource type="Script" uid="uid://b7sjtbg530ras" path="res://scripts/exterior/world/spot_generator.gd" id="1_dwxhc"]
+[ext_resource type="PackedScene" uid="uid://dtk85njfysf17" path="res://scenes/exterior/world/settlement_spot_clean.tscn" id="2_75dvv"]
+
+[node name="SpotGenerator" type="Node2D"]
+script = ExtResource("1_dwxhc")
+spot_scene = ExtResource("2_75dvv")

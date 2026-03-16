@@ -1,0 +1,17 @@
+[gd_scene load_steps=4 format=3 uid="uid://bxo8tt3j0n2py"]
+
+[ext_resource type="Script" uid="uid://bxbdwy3e7qct5" path="res://scripts/actors/ant_base.gd" id="1_44qi5"]
+[ext_resource type="Texture2D" uid="uid://cni7vkje6c7cl" path="res://icon.svg" id="2_utiov"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_4542v"]
+
+[node name="WorkerBase" type="CharacterBody2D"]
+script = ExtResource("1_44qi5")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_4542v")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+modulate = Color(0.24313726, 1, 0, 1)
+scale = Vector2(0.11914063, 0.095703125)
+texture = ExtResource("2_utiov")
