@@ -1,7 +1,8 @@
-# main_interior.gd - VERSIÓN CON GENERACIÓN AUTOMÁTICA DE SUELO
 extends Node2D
 
-# Referencias a nodos de la escena
+# -------------------------------------------------------------------
+# NODOS (AHORA CORRECTOS: TileMapLayer)
+# -------------------------------------------------------------------
 @onready var queen = $Queen
 @onready var camera = $Camera2D
 @onready var construction_system = $ConstructionSystem
@@ -10,7 +11,9 @@ extends Node2D
 @onready var ground_tilemap: TileMapLayer = $GroundTileMap
 @onready var structure_tilemap: TileMapLayer = $StructureTileMap
 
-# Variables de UI
+# -------------------------------------------------------------------
+# UI
+# -------------------------------------------------------------------
 var resource_label = null
 var population_label = null
 var instruction_label = null
@@ -18,7 +21,9 @@ var tunnel_instructions = null
 var build_button_ref: Button = null
 var tooltip_label: Label = null
 
-# Variables de colonia
+# -------------------------------------------------------------------
+# RECURSOS Y POBLACIÓN
+# -------------------------------------------------------------------
 var colony_resources = {
 	"food": 100.0,
 	"fungus": 50.0,
@@ -39,7 +44,9 @@ var colony_population = {
 	"eggs": 0
 }
 
-# Sistema de producción de obreras
+# -------------------------------------------------------------------
+# PRODUCCIÓN DE OBRERAS
+# -------------------------------------------------------------------
 var production_queue = []
 var max_queue_size = 4
 var production_timer = 0.0
@@ -47,28 +54,92 @@ var production_interval = 2.0
 var creation_panel = null
 var developing_ants = []
 
-# Sistema de excavación
-var excavation_points = []          # Almacena Vector2i de tiles de suelo que se pueden excavar
+# -------------------------------------------------------------------
+# EXCAVACIÓN
+# -------------------------------------------------------------------
+var excavation_points = []          # Lista de tiles excavables (Vector2i)
 var current_excavation_target: Vector2i
-var pending_excavation_tile: Vector2i = Vector2i(-1,-1)
+var pending_excavation_tile: Vector2i = Vector2i(-1, -1)
 var is_excavating = false
 var excavation_progress = 0.0
 var excavation_speed = 1.0
 var excavation_time_needed = 2.0
 
-# Variables generales
+# -------------------------------------------------------------------
+# GENERAL
+# -------------------------------------------------------------------
 var game_time: float = 0.0
 var first_egg_laid: bool = false
 var selected_ant: AntBase = null
 var active_ants = []
 var camera_target = null
 
-# Constantes de tiles
-const TILE_TUNNEL = 0
-const TILE_SOIL = 1
-const TILE_CHAMBER = 2
-const AUTO_GENERATE_SOIL = true  # Pon false si NO quieres que se genere suelo automático
-# Variables para construcción
+# -------------------------------------------------------------------
+# CONSTANTES DE TILES (¡AJUSTADAS SEGÚN TUS DATOS!)
+# -------------------------------------------------------------------
+const TILE_SOIL = 1               # El suelo en ground_tilemap tiene source_id = 1
+const TILE_TUNNEL = 0             # Suponiendo que el túnel es el primer tile en structure_tilemap
+const TILE_CHAMBER = 2            # Ajusta según tu tileset de estructura
+const AUTO_GENERATE_SOIL = true   # Activar generación automática
+
+# --- Lista de Patrones de Túnel Predefinidos ---
+var tunnel_patterns = [
+	# Patrón 0: Túnel pequeño de 1x1 (el original)
+	{
+		"cells": [[1]],
+		"offset_x": 0,
+		"offset_y": 0
+	},
+	# Patrón 1: Túnel en forma de cruz
+	{
+		"cells": [
+			[0, 1, 0],
+			[1, 1, 1],
+			[0, 1, 0]
+		],
+		"offset_x": -1,
+		"offset_y": -1
+	},
+	# Patrón 2: Túnel de 2x2
+	{
+		"cells": [
+			[1, 1],
+			[1, 1]
+		],
+		"offset_x": -1,
+		"offset_y": -1
+	},
+	# Patrón 3: Túnel en forma de L
+	{
+		"cells": [
+			[1, 0],
+			[1, 1]
+		],
+		"offset_x": -1,
+		"offset_y": -1
+	},
+	# Patrón 4: Túnel en línea recta horizontal
+	{
+		"cells": [
+			[1, 1, 1]
+		],
+		"offset_x": -1,
+		"offset_y": 0
+	},
+	# Patrón 5: Túnel en línea recta vertical
+	{
+		"cells": [
+			[1],
+			[1],
+			[1]
+		],
+		"offset_x": 0,
+		"offset_y": -1
+	}
+]
+# -------------------------------------------------------------------
+# CONSTRUCCIÓN
+# -------------------------------------------------------------------
 var construction_panel = null
 var selected_tile_for_construction: Vector2i
 var construction_mode = false
@@ -85,26 +156,25 @@ func _ready():
 		create_emergency_queen()
 	
 	setup_camera()
-	setup_ui_layer()
+	setup_ui()
 	
-	# Generar suelo automático si es necesario
 	if AUTO_GENERATE_SOIL:
-		ensure_ground_around_queen()
+		generate_initial_ground()
 	
 	create_initial_excavation_points()
 	
 	print("\n🎮 CONTROLES INTERIOR:")
-	print("🖱️  CLICK en suelo (marcado) - La obrera va y excava")
-	print("🔨 CLICK en túnel (modo construir activado) - Construir cámara")
+	print("🖱️  CLICK en suelo excavable - La obrera va y excava")
+	print("🔨 CLICK en túnel (modo construir) - Construir cámara")
 	print("⛏️  ESPACIO - Excavar más rápido")
 	print("🔍 WASD/Flechas - Mover cámara")
 	print("📱 Rueda ratón - Zoom")
-	print("📊 TAB - Debug de colonia")
+	print("📊 TAB - Debug")
 	print("🎥 C - Seguir/Liberar cámara")
-	print("🔍 R - Resetear zoom")
+	print("🔍 R - Reset zoom")
 
 # -------------------------------------------------------------------
-# FUNCIONES DE INICIALIZACIÓN
+# FUNCIONES DE INICIO
 # -------------------------------------------------------------------
 func create_emergency_queen():
 	var queen_scene = load("res://scenes/actors/queen_acromyrmex.tscn")
@@ -115,12 +185,10 @@ func create_emergency_queen():
 		queen.is_player_controlled = true
 		add_child(queen)
 	else:
-		print("❌ ERROR: No se pudo crear reina")
+		print("❌ ERROR: No se pudo cargar la escena de la reina")
 
 func setup_camera():
-	if has_node("Camera2D"):
-		camera = $Camera2D
-	else:
+	if not camera:
 		camera = Camera2D.new()
 		camera.name = "Camera2D"
 		add_child(camera)
@@ -134,7 +202,7 @@ func setup_camera():
 		camera.position = queen.position
 		camera_target = queen
 
-func setup_ui_layer():
+func setup_ui():
 	var ui_layer = CanvasLayer.new()
 	ui_layer.name = "UILayer"
 	ui_layer.layer = 10
@@ -144,7 +212,6 @@ func setup_ui_layer():
 	instruction_label.name = "InstructionLabel"
 	instruction_label.text = "🏗️  CONSTRUYE TÚNELES\nSelecciona una obrera y haz click en suelo excavable"
 	instruction_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	instruction_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	instruction_label.position = Vector2(400, 30)
 	instruction_label.add_theme_font_size_override("font_size", 18)
 	ui_layer.add_child(instruction_label)
@@ -168,13 +235,18 @@ func setup_ui_layer():
 	resource_label.add_theme_font_size_override("font_size", 12)
 	vbox.add_child(resource_label)
 	
+	population_label = Label.new()
+	population_label.name = "PopulationLabel"
+	population_label.text = get_population_text()
+	population_label.add_theme_font_size_override("font_size", 12)
+	vbox.add_child(population_label)
+	
 	var create_button = Button.new()
 	create_button.text = "➕ Crear Obrera"
 	create_button.position = Vector2(700, 80)
 	create_button.pressed.connect(_show_creation_panel)
 	ui_layer.add_child(create_button)
 	
-	# Botón de modo construcción
 	var build_button = Button.new()
 	build_button.text = "🔨 Construir"
 	build_button.position = Vector2(820, 80)
@@ -183,13 +255,6 @@ func setup_ui_layer():
 	ui_layer.add_child(build_button)
 	build_button_ref = build_button
 	
-	population_label = Label.new()
-	population_label.name = "PopulationLabel"
-	population_label.text = get_population_text()
-	population_label.add_theme_font_size_override("font_size", 12)
-	vbox.add_child(population_label)
-	
-	# Tooltip flotante
 	tooltip_label = Label.new()
 	tooltip_label.name = "TooltipLabel"
 	tooltip_label.text = ""
@@ -197,149 +262,167 @@ func setup_ui_layer():
 	tooltip_label.add_theme_font_size_override("font_size", 12)
 	tooltip_label.modulate = Color(1, 1, 1, 0.9)
 	tooltip_label.add_theme_color_override("font_color", Color.BLACK)
-	tooltip_label.add_theme_stylebox_override("normal", create_tooltip_style())
 	tooltip_label.visible = false
 	ui_layer.add_child(tooltip_label)
 
-func create_tooltip_style() -> StyleBoxFlat:
-	var style = StyleBoxFlat.new()
-	style.bg_color = Color(1, 1, 0.8, 0.9)
-	style.border_color = Color(0.5, 0.3, 0.1)
-	style.border_width_left = 2
-	style.border_width_top = 2
-	style.border_width_right = 2
-	style.border_width_bottom = 2
-	style.corner_radius_top_left = 4
-	style.corner_radius_top_right = 4
-	style.corner_radius_bottom_right = 4
-	style.corner_radius_bottom_left = 4
-	return style
-
 # -------------------------------------------------------------------
-# GENERACIÓN AUTOMÁTICA DE SUELO
+# GENERACIÓN DE SUELO EN ANILLO (para que la reina tenga espacio)
 # -------------------------------------------------------------------
-# -------------------------------------------------------------------
-# GENERACIÓN AUTOMÁTICA DE SUELO CON VARIANTES
-# -------------------------------------------------------------------
-# -------------------------------------------------------------------
-# GENERACIÓN AUTOMÁTICA DE SUELO (solo donde es necesario)
-# -------------------------------------------------------------------
-func ensure_ground_around_queen():
-	# Solo si está activada la generación automática
-	if not AUTO_GENERATE_SOIL:
+func generate_initial_ground():
+	if not queen or not ground_tilemap:
 		return
-		
-	var queen_tile = ground_tilemap.local_to_map(queen.position)
-	var any_soil = false
 	
-	# Comprobar si ya hay suelo en un radio de 3 tiles
-	for dx in range(-3, 4):
-		for dy in range(-3, 4):
-			var tile = queen_tile + Vector2i(dx, dy)
-			if ground_tilemap.get_cell_source_id(tile) == TILE_SOIL:
-				any_soil = true
-				break
-		if any_soil:
-			break
+	var queen_cell = ground_tilemap.local_to_map(queen.global_position)
+	var inner_radius = 3   # Espacio vacío alrededor de la reina (ahora 7x7)
+	var outer_radius = 8   # Suelo hasta 8 tiles de distancia (área 17x17)
 	
-	# Si no hay suelo, generar un área de radio 4 (9x9)
-	if not any_soil:
-		print("⚠️ No hay suelo alrededor. Generando suelo mínimo...")
-		for dx in range(-4, 5):
-			for dy in range(-4, 5):
-				# Excluir las esquinas lejanas (opcional, para forma más circular)
-				if abs(dx) > 4 or abs(dy) > 4:
-					continue
-				var tile = queen_tile + Vector2i(dx, dy)
-				# Solo si está vacío
-				if ground_tilemap.get_cell_source_id(tile) == -1:
+	var generated = 0
+	for x in range(queen_cell.x - outer_radius, queen_cell.x + outer_radius + 1):
+		for y in range(queen_cell.y - outer_radius, queen_cell.y + outer_radius + 1):
+			var cell = Vector2i(x, y)
+			var distance = max(abs(x - queen_cell.x), abs(y - queen_cell.y))
+			
+			if distance <= outer_radius and distance > inner_radius:
+				if ground_tilemap.get_cell_source_id(cell) == -1:
 					var variant = randi() % 4
-					ground_tilemap.set_cell(tile, TILE_SOIL, Vector2i(variant, 0))
-		print("✅ Suelo generado en área 9x9 alrededor de la reina")
+					ground_tilemap.set_cell(cell, TILE_SOIL, Vector2i(variant, 0))
+					generated += 1
+			elif distance <= inner_radius:
+				if ground_tilemap.get_cell_source_id(cell) != -1:
+					ground_tilemap.set_cell(cell, -1)
+	
+	print("✅ Suelo generado: ", generated, " tiles en anillo (interior vacío de ", inner_radius*2+1, "x", inner_radius*2+1, ")")
 
 # -------------------------------------------------------------------
-# EXCAVACIÓN - PUNTOS INICIALES A DISTANCIA (2-4 tiles)
+# PUNTOS DE EXCAVACIÓN INICIALES (en el borde interior)
 # -------------------------------------------------------------------
 func create_initial_excavation_points():
-	var queen_tile = ground_tilemap.local_to_map(queen.position)
-	print("Tile de la reina: ", queen_tile, " ID: ", ground_tilemap.get_cell_source_id(queen_tile))
+	excavation_points.clear()
 	
+	if not queen or not ground_tilemap:
+		return
+	
+	var queen_cell = ground_tilemap.local_to_map(queen.global_position)
 	var candidates = []
 	
-	# Buscar en un anillo de 2 a 4 tiles de distancia
-	for dx in range(-4, 5):
-		for dy in range(-4, 5):
-			# Excluir el centro y los adyacentes (distancia <= 1)
-			if abs(dx) <= 1 and abs(dy) <= 1:
+	# Buscar en un radio de 3 a 8 (donde ahora hay suelo)
+	for dx in range(-8, 9):
+		for dy in range(-8, 9):
+			var distance = max(abs(dx), abs(dy))
+			if distance < 3 or distance > 8:
 				continue
-			# Excluir también si está demasiado lejos? ya está limitado por el rango
-			var tile_pos = queen_tile + Vector2i(dx, dy)
-			var tile_id = ground_tilemap.get_cell_source_id(tile_pos)
-			var structure_id = structure_tilemap.get_cell_source_id(tile_pos)
-			if tile_id == TILE_SOIL and structure_id == -1:
+			var tile_pos = queen_cell + Vector2i(dx, dy)
+			if ground_tilemap.get_cell_source_id(tile_pos) != TILE_SOIL:
+				continue
+			
+			# Comprobar si tiene un vecino vacío hacia el centro
+			var dir_to_center = Vector2i(-sign(dx), -sign(dy))
+			var neighbor = tile_pos + dir_to_center
+			if ground_tilemap.get_cell_source_id(neighbor) == -1:
 				candidates.append(tile_pos)
 	
-	# Seleccionar aleatoriamente hasta 8 puntos
 	candidates.shuffle()
 	var count = 0
 	for tile_pos in candidates:
-		if count >= 8:
+		if count >= 16:  # Ahora podemos tener más puntos (hasta 16)
 			break
-		if tile_pos not in excavation_points:
-			excavation_points.append(tile_pos)
-			count += 1
-			print("✅ Punto excavable añadido: ", tile_pos)
+		excavation_points.append(tile_pos)
+		count += 1
+		print("➕ Punto excavable: ", tile_pos)
 	
-	print("🔵 %d puntos de excavación iniciales (a distancia 2-4 tiles)" % count)
+	print("🔵 ", count, " puntos de excavación iniciales")
 
+# -------------------------------------------------------------------
+# DETECCIÓN DE PUNTO EXCAVABLE
+# -------------------------------------------------------------------
 func get_excavation_point_at(pos: Vector2) -> Variant:
 	var tile_pos = ground_tilemap.local_to_map(pos)
-	print("Mouse en tile: ", tile_pos, " en lista? ", tile_pos in excavation_points)
 	if tile_pos in excavation_points:
 		if ground_tilemap.get_cell_source_id(tile_pos) == TILE_SOIL:
-			print("✅ Es punto excavable")
 			return tile_pos
 		else:
 			excavation_points.erase(tile_pos)
-			print("⚠️ Tile ya no es suelo, eliminado")
 	return null
 
+# -------------------------------------------------------------------
+# SOLICITUD DE EXCAVACIÓN
+# -------------------------------------------------------------------
 func request_excavation(tile_pos: Vector2i, excavator: AntBase):
-	print("request_excavation llamado con tile: ", tile_pos)
-	if pending_excavation_tile != Vector2i(-1,-1):
-		pending_excavation_tile = Vector2i(-1,-1)
+	if pending_excavation_tile != Vector2i(-1, -1):
+		pending_excavation_tile = Vector2i(-1, -1)
 		print("⏹️  Excavación pendiente cancelada")
 	pending_excavation_tile = tile_pos
 	excavator.set_target(ground_tilemap.map_to_local(tile_pos))
 	print("🚶 Obrera yendo a excavar a ", tile_pos)
 
+# -------------------------------------------------------------------
+# INICIO DE EXCAVACIÓN
+# -------------------------------------------------------------------
 func start_excavation(tile_pos: Vector2i):
-	if is_excavating: 
+	# Evitar empezar una excavación si ya hay una en curso
+	if is_excavating:
+		print("⚠️  Ya se está excavando, no se puede empezar otra")
 		return
+	
+	# Verificar que el tile sigue siendo suelo y está en la lista
+	if tile_pos not in excavation_points:
+		print("⚠️  El tile ", tile_pos, " ya no es excavable")
+		return
+	
+	if ground_tilemap.get_cell_source_id(tile_pos) != TILE_SOIL:
+		print("⚠️  El tile ", tile_pos, " ya no es suelo")
+		excavation_points.erase(tile_pos)
+		return
+	
 	current_excavation_target = tile_pos
 	is_excavating = true
 	excavation_progress = 0.0
 	excavation_speed = 1.0
-	print("⛏️  Comienza excavación en tile: ", tile_pos)
+	print("⛏️  Comienza excavación en ", tile_pos)
 
+# -------------------------------------------------------------------
+# COMPLETAR EXCAVACIÓN
+# -------------------------------------------------------------------
 func complete_tunnel_excavation():
 	print("✅ ¡Túnel excavado!")
 	var variant = randi() % 4
 	var atlas_coords = Vector2i(variant, 0)
-	
-	ground_tilemap.set_cell(current_excavation_target, -1)
-	structure_tilemap.set_cell(current_excavation_target, TILE_TUNNEL, atlas_coords)
-	
+
+	# 1. Seleccionar un patrón aleatorio
+	var selected_pattern = tunnel_patterns[0]
+	var pattern_cells = selected_pattern["cells"]
+	var offset_x = selected_pattern["offset_x"]
+	var offset_y = selected_pattern["offset_y"]
+
+	# 2. Recorrer el patrón y colocar los tiles
+	for y in range(pattern_cells.size()):
+		for x in range(pattern_cells[y].size()):
+			if pattern_cells[y][x] == 1:
+				var tile_x = current_excavation_target.x + x + offset_x
+				var tile_y = current_excavation_target.y + y + offset_y
+				var tile_pos = Vector2i(tile_x, tile_y)
+
+				structure_tilemap.set_cell(tile_pos, TILE_TUNNEL, atlas_coords)
+				if ground_tilemap.get_cell_source_id(tile_pos) != -1:
+					ground_tilemap.set_cell(tile_pos, -1)
+
+	# 3. Eliminar el punto excavable original de la lista
 	excavation_points.erase(current_excavation_target)
-	
-	# Generar nuevos puntos ADYACENTES (a 1 tile)
+
+	# 4. Generar nuevos puntos alrededor del área excavada
 	create_new_excavation_points(current_excavation_target)
-	
+
+	# 5. ¡CRUCIAL! Resetear todas las variables de excavación
 	is_excavating = false
 	excavation_progress = 0.0
 	current_excavation_target = Vector2i(-1, -1)
-	instruction_label.text = "✅ TÚNEL COMPLETADO\n¡Puedes excavar más!"
 
+	# 6. Actualizar UI
+	instruction_label.text = "✅ TÚNEL COMPLETADO\n¡Puedes excavar más!"
+	print("✅ Excavación finalizada correctamente")
+# -------------------------------------------------------------------
+# CREAR NUEVOS PUNTOS ALREDEDOR DE UN TÚNEL
+# -------------------------------------------------------------------
 func create_new_excavation_points(center_tile: Vector2i):
 	var directions = [
 		Vector2i(1,0), Vector2i(-1,0), Vector2i(0,1), Vector2i(0,-1),
@@ -348,26 +431,27 @@ func create_new_excavation_points(center_tile: Vector2i):
 	directions.shuffle()
 	var count = 0
 	for dir in directions:
-		if count >= 3: break
+		if count >= 3:
+			break
 		var new_tile = center_tile + dir
-		var tile_id = ground_tilemap.get_cell_source_id(new_tile)
-		var structure_id = structure_tilemap.get_cell_source_id(new_tile)
-		if tile_id == TILE_SOIL and structure_id == -1:
+		if ground_tilemap.get_cell_source_id(new_tile) == TILE_SOIL and structure_tilemap.get_cell_source_id(new_tile) == -1:
 			if new_tile not in excavation_points:
 				excavation_points.append(new_tile)
 				count += 1
 				print("➕ Nuevo punto excavable adyacente: ", new_tile)
 
-# Efectos visuales
+# -------------------------------------------------------------------
+# EFECTO VISUAL DE EXCAVACIÓN
+# -------------------------------------------------------------------
 func create_mining_effect(pos: Vector2):
 	for i in range(2):
 		var dust = Sprite2D.new()
-		dust.position = pos + Vector2(randf_range(-15,15), randf_range(-15,15))
+		dust.position = pos + Vector2(randf_range(-15, 15), randf_range(-15, 15))
 		dust.texture = create_dust_texture()
 		dust.modulate = Color(0.7, 0.6, 0.4, 0.8)
 		add_child(dust)
 		var tween = create_tween()
-		tween.tween_property(dust, "position", dust.position + Vector2(randf_range(-20,20), -randf_range(30,50)), 0.8)
+		tween.tween_property(dust, "position", dust.position + Vector2(randf_range(-20, 20), -randf_range(30, 50)), 0.8)
 		tween.parallel().tween_property(dust, "modulate:a", 0.0, 0.8)
 		tween.tween_callback(dust.queue_free)
 
@@ -379,7 +463,7 @@ func create_dust_texture() -> Texture2D:
 			var dx = x - 3
 			var dy = y - 3
 			if dx*dx + dy*dy > 9:
-				image.set_pixel(x, y, Color(0,0,0,0))
+				image.set_pixel(x, y, Color(0, 0, 0, 0))
 	return ImageTexture.create_from_image(image)
 
 # -------------------------------------------------------------------
@@ -475,7 +559,7 @@ func _on_build_chamber(chamber_type: int):
 	update_ui()
 
 # -------------------------------------------------------------------
-# CREACIÓN DE OBRERAS
+# CREACIÓN DE OBRERAS (PANEL)
 # -------------------------------------------------------------------
 func _show_creation_panel():
 	if creation_panel and is_instance_valid(creation_panel):
@@ -549,13 +633,13 @@ func _close_creation_panel():
 
 func _on_create_worker_from_panel(caste: AntBase.AntCaste, cost: int):
 	if production_queue.size() >= max_queue_size:
-		print("⚠️  Cola de producción llena (máx %d). Espera a que se procesen." % max_queue_size)
+		print("⚠️  Cola de producción llena (máx %d). Espera." % max_queue_size)
 		return
 	if colony_resources["food"] < cost:
 		print("❌ No hay suficiente comida (necesitas %d)" % cost)
 		return
 	production_queue.append({ "caste": caste, "cost": cost })
-	print("📦 Pedido añadido a la cola. Total en cola: %d" % production_queue.size())
+	print("📦 Pedido añadido a la cola. Total: %d" % production_queue.size())
 	if creation_panel and is_instance_valid(creation_panel):
 		_update_panel_queue_info()
 
@@ -567,7 +651,7 @@ func _create_egg(caste: AntBase.AntCaste, cost: float):
 	var egg = Sprite2D.new()
 	egg.texture = create_egg_texture()
 	egg.scale = Vector2(0.3, 0.3)
-	egg.position = queen.position + Vector2(randf_range(-30,30), randf_range(-30,30))
+	egg.position = queen.position + Vector2(randf_range(-30, 30), randf_range(-30, 30))
 	add_child(egg)
 	developing_ants.append({
 		"caste": caste,
@@ -577,12 +661,12 @@ func _create_egg(caste: AntBase.AntCaste, cost: float):
 		"position": egg.position
 	})
 	colony_population["eggs"] += 1
-	print("🥚 Huevo de %s puesto. Tiempo para eclosionar: 5.0 s" % get_caste_display_name(caste))
+	print("🥚 Huevo de %s puesto." % get_caste_display_name(caste))
 	update_ui()
 	if colony_population["eggs"] == 1 and not first_egg_laid:
 		first_egg_laid = true
 		queen.is_player_controlled = false
-		print("👑 La reina ha puesto su primer huevo y ya no se moverá.")
+		print("👑 La reina ha puesto su primer huevo.")
 		instruction_label.text = "🥚 PRIMER HUEVO - Ahora las obreras trabajan"
 
 func _update_panel_queue_info():
@@ -615,40 +699,38 @@ func _on_worker_clicked(_viewport: Node, event: InputEvent, _shape_idx: int, wor
 		print("🖱️  Obrera seleccionada: %s" % worker.get_display_name())
 
 # -------------------------------------------------------------------
-# PROCESAMIENTO PRINCIPAL
+# _process Y _input
 # -------------------------------------------------------------------
 func _process(delta):
 	game_time += delta
-	
-	# Tooltip
 	update_tooltip()
 	
-	# Comprobar si la obrera seleccionada ha llegado al tile pendiente de excavar
-	if selected_ant and pending_excavation_tile != Vector2i(-1,-1) and not is_excavating:
+	# Comprobar si la obrera llegó al punto de excavación
+	if selected_ant and pending_excavation_tile != Vector2i(-1, -1) and not is_excavating:
 		var target_world = ground_tilemap.map_to_local(pending_excavation_tile)
-		if selected_ant.position.distance_to(target_world) < 15:
-			# Llegó al destino, comenzar excavación
+		if selected_ant.position.distance_to(target_world) < 40:
 			start_excavation(pending_excavation_tile)
-			pending_excavation_tile = Vector2i(-1,-1)
+			pending_excavation_tile = Vector2i(-1, -1)
 	
-	# Excavación en progreso
+	# Manejo de la excavación en curso
 	if is_excavating:
 		excavation_progress += delta * excavation_speed
 		var world_pos = ground_tilemap.map_to_local(current_excavation_target)
 		if int(game_time * 5) % 2 == 0:
 			create_mining_effect(world_pos)
+		
+		# Condición de finalización
 		if excavation_progress >= excavation_time_needed:
 			complete_tunnel_excavation()
-	
-	# UI
-	if int(game_time) % 1 == 0:
-		update_ui()
-		if is_excavating:
-			instruction_label.text = "⛏️  EXCAVANDO TÚNEL... %.0f%%" % (excavation_progress / excavation_time_needed * 100)
 		else:
-			instruction_label.text = "🏗️  CONSTRUYE TÚNELES\nClick en suelo excavable"
+			# Actualizar texto de progreso
+			var percent = int((excavation_progress / excavation_time_needed) * 100)
+			instruction_label.text = "⛏️  EXCAVANDO... %d%%" % percent
+	else:
+		# Si no se está excavando, mostrar instrucciones normales
+		instruction_label.text = "🏗️  CONSTRUYE TÚNELES\nClick en suelo excavable"
 	
-	# Cámara
+	# Control de cámara (esto debe ir fuera del if is_excavating)
 	if camera_target:
 		camera.position = camera_target.position
 	if not camera_target:
@@ -657,7 +739,7 @@ func _process(delta):
 		if move.length() > 0:
 			camera.position += move.normalized() * move_speed
 	
-	# Desarrollo de huevos
+	# Desarrollo de huevos, larvas y pupas
 	for ant in developing_ants:
 		ant.timer -= delta
 		if ant.timer <= 0:
@@ -703,12 +785,49 @@ func _process(delta):
 	construction_system.update_construction(delta)
 
 func _input(event):
-	# Ignorar clics en UI
+	# Clic izquierdo
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		# Ignorar si el ratón está sobre un elemento de la UI
 		if get_viewport().gui_get_hovered_control() != null:
 			return
+		
+		var mouse_pos = get_global_mouse_position()
+		var clicked_tile = get_excavation_point_at(mouse_pos)
+		
+		# Caso 1: Clic en punto excavable
+		if clicked_tile != null and not is_excavating:
+			if selected_ant and selected_ant.is_alive():
+				request_excavation(clicked_tile, selected_ant)
+			else:
+				print("❌ Selecciona una obrera para excavar")
+			get_viewport().set_input_as_handled()
+			return
+		
+		# Caso 2: Clic en túnel con modo construcción activado
+		var tile_pos = structure_tilemap.local_to_map(mouse_pos)
+		if construction_mode and structure_tilemap.get_cell_source_id(tile_pos) == TILE_TUNNEL:
+			_show_construction_panel(tile_pos)
+			get_viewport().set_input_as_handled()
+			return
+		
+		# Caso 3: Clic en suelo normal (no excavable) o en cualquier otro sitio
+		# Aquí movemos la entidad seleccionada, PERO si hay una excavación pendiente o en curso, NO la movemos
+		if selected_ant and selected_ant.is_alive():
+			# Si hay una excavación pendiente o en curso, no permitir mover la obrera
+			if pending_excavation_tile != Vector2i(-1, -1) or is_excavating:
+				print("⚠️  La obrera tiene una excavación pendiente o en curso, no se puede mover")
+				get_viewport().set_input_as_handled()
+				return
+			selected_ant.set_target(mouse_pos)
+			print("🐜 Obrera moviéndose a: ", mouse_pos)
+		elif queen and queen.is_player_controlled and not first_egg_laid:
+			queen.set_target(mouse_pos)
+			print("👑 Reina moviéndose a: ", mouse_pos)
+		
+		get_viewport().set_input_as_handled()
+		return
 	
-	# Zoom
+	# Zoom con rueda del ratón
 	if event is InputEventMouseButton and camera:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			camera.zoom *= 1.1
@@ -721,40 +840,7 @@ func _input(event):
 			get_viewport().set_input_as_handled()
 			return
 	
-	# Click izquierdo
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		var mouse_pos = get_global_mouse_position()
-		var clicked_tile = get_excavation_point_at(mouse_pos)
-		
-		if clicked_tile != null and not is_excavating:
-			if selected_ant and selected_ant.is_alive():
-				request_excavation(clicked_tile, selected_ant)
-			else:
-				print("❌ Selecciona una obrera para excavar")
-			get_viewport().set_input_as_handled()
-			return
-		else:
-			# Verificar si hay un túnel y modo construcción activo
-			var tile_pos = structure_tilemap.local_to_map(mouse_pos)
-			if construction_mode and structure_tilemap.get_cell_source_id(tile_pos) == TILE_TUNNEL:
-				_show_construction_panel(tile_pos)
-				get_viewport().set_input_as_handled()
-				return
-			else:
-				# Mover entidad seleccionada (y cancelar excavación pendiente)
-				if selected_ant and selected_ant.is_alive():
-					selected_ant.set_target(mouse_pos)
-					if pending_excavation_tile != Vector2i(-1,-1):
-						pending_excavation_tile = Vector2i(-1,-1)
-						print("⏹️  Excavación pendiente cancelada por movimiento")
-					print("🐜 Obrera moviéndose a: %s" % mouse_pos)
-				elif queen and queen.is_player_controlled and not first_egg_laid:
-					queen.set_target(mouse_pos)
-					print("👑 Reina moviéndose a: %s" % mouse_pos)
-				get_viewport().set_input_as_handled()
-				return
-	
-	# Teclas de acción
+	# Teclas
 	if event is InputEventKey and event.pressed:
 		match event.keycode:
 			KEY_SPACE:
@@ -786,7 +872,7 @@ func update_tooltip():
 		tooltip_label.visible = false
 
 # -------------------------------------------------------------------
-# FUNCIONES DE UI Y UTILIDADES
+# UI ACTUALIZACIÓN
 # -------------------------------------------------------------------
 func update_ui():
 	if resource_label and is_instance_valid(resource_label):
@@ -823,17 +909,13 @@ func get_population_text() -> String:
 ]
 
 func debug_colony_status():
-	print("\n=== 🐜 DEBUG COLONIA ===")
+	print("\n=== 🐜 DEBUG ===")
 	print("Tiempo: %.1f s" % game_time)
 	print("Puntos excavación: %d" % excavation_points.size())
 	print("Excavando: %s" % is_excavating)
-	print("Recursos:")
-	for key in colony_resources:
-		print("  %s: %.1f" % [key, colony_resources[key]])
-	print("Población:")
-	for key in colony_population:
-		print("  %s: %d" % [key, colony_population[key]])
-	print("======================")
+	print("Recursos: ", colony_resources)
+	print("Población: ", colony_population)
+	print("================")
 
 func update_population_count(caste: AntBase.AntCaste, delta: int):
 	match caste:
@@ -849,7 +931,7 @@ func update_population_count(caste: AntBase.AntCaste, delta: int):
 			colony_population["worker_mayor"] += delta
 
 # -------------------------------------------------------------------
-# FUNCIONES AUXILIARES
+# FUNCIONES AUXILIARES (sprites y nombres)
 # -------------------------------------------------------------------
 func get_random_worker_name(caste: AntBase.AntCaste) -> String:
 	var names = ["Alfa", "Beta", "Gamma", "Delta", "Épsilon", "Zeta"]
@@ -871,35 +953,35 @@ func get_caste_display_name(caste: AntBase.AntCaste) -> String:
 
 func create_egg_texture() -> Texture2D:
 	var image = Image.create(16, 16, false, Image.FORMAT_RGBA8)
-	image.fill(Color(0,0,0,0))
+	image.fill(Color(0, 0, 0, 0))
 	for x in range(16):
 		for y in range(16):
-			var dx = x-8
-			var dy = y-8
+			var dx = x - 8
+			var dy = y - 8
 			if dx*dx + dy*dy <= 40:
-				image.set_pixel(x, y, Color(1,1,0.8,1))
+				image.set_pixel(x, y, Color(1, 1, 0.8, 1))
 	return ImageTexture.create_from_image(image)
 
 func create_larvae_texture(_caste: AntBase.AntCaste) -> Texture2D:
-	var image = Image.create(16,16,false,Image.FORMAT_RGBA8)
-	image.fill(Color(0,0,0,0))
+	var image = Image.create(16, 16, false, Image.FORMAT_RGBA8)
+	image.fill(Color(0, 0, 0, 0))
 	for x in range(16):
 		for y in range(16):
-			var dx = (x-8)/6.0
-			var dy = (y-8)/4.0
+			var dx = (x - 8) / 6.0
+			var dy = (y - 8) / 4.0
 			if dx*dx + dy*dy <= 1:
-				image.set_pixel(x, y, Color(0.9,0.8,0.6,1))
+				image.set_pixel(x, y, Color(0.9, 0.8, 0.6, 1))
 	return ImageTexture.create_from_image(image)
 
 func create_pupa_texture(_caste: AntBase.AntCaste) -> Texture2D:
-	var image = Image.create(16,16,false,Image.FORMAT_RGBA8)
-	image.fill(Color(0,0,0,0))
+	var image = Image.create(16, 16, false, Image.FORMAT_RGBA8)
+	image.fill(Color(0, 0, 0, 0))
 	for x in range(16):
 		for y in range(16):
-			var dx = x-8
-			var dy = y-8
+			var dx = x - 8
+			var dy = y - 8
 			if dx*dx + dy*dy <= 36:
-				image.set_pixel(x, y, Color(0.6,0.5,0.4,1))
+				image.set_pixel(x, y, Color(0.6, 0.5, 0.4, 1))
 	return ImageTexture.create_from_image(image)
 
 func _create_adult_worker(caste: AntBase.AntCaste, spawn_position: Vector2):
@@ -963,7 +1045,7 @@ func open_construction_menu():
 		print("   Tiempo: %.1f s" % chamber["build_time"])
 		print("   %s" % chamber["description"])
 		print("---")
-	print("\nPresiona 1-%d para construir, ESC para cancelar" % available.size())
+	print("\nPresiona 1-%d para construir, E			SC para cancelar" % available.size())
 
 func _on_construction_started(chamber_type, chamber_pos: Vector2):
 	print("🏗️  Construcción iniciada: %s en %s" % [chamber_type, chamber_pos])
@@ -974,11 +1056,9 @@ func _on_construction_completed(chamber_data):
 func _on_construction_progress(_progress_percent):
 	pass
 
-# -------------------------------------------------------------------
-# FUNCIONES DE CONSTRUCCIÓN (no usadas por ahora)
-# -------------------------------------------------------------------
 func setup_chamber_system():
 	pass
+
 func setup_construction_system():
 	if construction_system:
 		construction_system.construction_started.connect(_on_construction_started)
